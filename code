@@ -12,71 +12,9 @@ editor_options:
 
 
 #Setup
-#..........About this Document
-
-This file is a complete suite for loading and analyzing eBird data.
-max is 15 GB.
 
 Please open the "outline" view on your R session to see the structure of this document. 
 
-Please see the "dataset optioning" section for a breakdown of the available datasets and their contents
-
-#..........Topics to Explore
-
-- IDEAS: do raster optimization as part of the project. Get more complex profiles on users from checklist data..
-
-- Why are there not more missing pixels in variability map?
-
-- I could make the project in part about optimizing the resolution for prediciton
-
-- The test train split does not appear to be random!!!!
-
-
-- I believe I set the big filter to only use atlas data. But there were likely many observations in Wisconsin during the same time period, huge loss of data! Also, you can approximate the breeding season by looking at breeding codes?
-
-- I really don't get why people subsample.It has nothing to do with the spatial correlation. It does not bias the data. Is it just hard to do the math when it is like that?
-
-- When you do gaussian process, make sure that the distance is calculated on the right projection etc.
-
-- There are plenty of other spatial covariates aside from elevation. Use them if you can!
-
-- To handle the tendency for PLAND to overpredict rare species (I'm guessing it will) should we use empirical bayes? Create priors from observed data?
-
-- The current subsampling methodoligies seem very odd. I changed it to not include species_observed
-
-- How to select which PLAND variables to use? I think we cannot use all PLANDS: would be mulitcollinearity. But that other data seems really important!
-
-- Some of the pland variables are not being extracted, why? Additionally, if I do fix this, the labeling mechanism may begin to mislabel. Finally, I think there is a mismatch between the pland and variable names.
-
-- The zero-inflated poisson regression is not performing
-
-- It would appear in the data exploration that a decent minority of unique observers are groups (i.e multiple IDs)
-
-
-- When we model on collected data, we have all covariates. When we go to predict, we don't have effort variables for example. Why bother with them in the first place?
-
-- Think about what you are modeling. Later numbers may include fledging birds
-
-- The week variable is probably a quadratic effect. Try to get the model to understand this
-
-- The model is predicting more values from .5 to 1 than for 0 to .5. Round these down to improve zero inflation?
-
-- When PLAND calculates, it seems like there may be a lot of NAs. Look into this if you have time.
-
-- In comparing observed zero inflation to predicted, they have to be compared carefully. IN the observed data, there are multiple zeros per block, for example. But in the prediction, there is only one prediction per block (or cell in this case)
-
-- Maybe add a covarte for multi-habitat areas: places where there is a mix of different habitats (or is this just an interaction)
-
-- MODIS often calcualtes pland for a cell and labels it as a habitat if it is more than 60%. But then I recalculate this using 50% for my primary pland...not a big deal, but is there a way to clean that up?
-
-- Bins may be too large when looking at zero inflation
-
-- It looks like pland is calculated with just the most recent year. I think I may have made that decision, but I should check the book. If not ,consider using it for each year
-
-#..........Key Resources
-
-Amazing Raster Course: https://datacarpentry.org/r-raster-vector-geospatial/
-https://wsobirds.org/images/atlas/BreedingGuidelineBarChart_PDF.pdf
 
 #..........Efficiency Settings
 
@@ -93,7 +31,6 @@ load_filter2b<-FALSE #Load in the full dataset for the Wisconsin Atlas
 NE_data_present<-TRUE #Set to true if you have the NE data you want
 
 MODIS_tiles_present<-TRUE #Set to true if you have the MODIS data already stored somewhere
-
 
 #IMAGES================================
 
@@ -254,7 +191,7 @@ trunc_poi_mean<-function(x){
 
 #Polynomialize: This function creates polynomial order for all items in a column of a df:
 polynomialize<-function(dataframe_dollar_column,degree){
-  #Clean off annoying levels, labels, factors
+  #Clean off troublesome levels, labels, factors
   dataframe_dollar_column<-as.character(dataframe_dollar_column)
   #Set up an empty frame to populate
   order_names<-rep(NA,degree)
@@ -337,11 +274,6 @@ Prediction_Mapper<-function(preds,
   #=====================Relative Abundance
 pred_abd_df<-df_to_GGraster_center_points(input_df = preds,crs = 4326,variable_to_plot_QUOTED = "abd")
 
-#Set up the scales. See the ebird guide book for ideas on how to do this, they did it for their "plot" procedure
-# abd_limits <- c(pred_abd_df$abd%>%min%>%floor(),
-#                     pred_abd_df$abd%>%max%>%round(0))
-# abd_breaks <- seq(from = abd_limits[1],to = abd_limits[2],by = 1)
-
 #Plot the se of abundance
 abd_plot<-ebird_standard_frame+
   geom_raster(data = pred_abd_df , aes(x = latitude, y = longitude, fill = abd)) + #smoother is available
@@ -367,9 +299,6 @@ abd_se_plot<-ebird_standard_frame+
                        limits=c(0,se_upper),oob=oob_arg)+
   geom_sf(data=wisconsin_sf, fill="transparent")
 
-# colfunc <- colorRampPalette(c("white"))
-# colfunc(1)
-# plot(rep(1,100),col=colfunc(100),pch=19,cex=3)
 }else{
   abd_se_plot<-ebird_standard_frame+
     #Give it dummy data
@@ -385,8 +314,7 @@ abd_se_plot<-ebird_standard_frame+
 }
 #====================Map of observed Data
 
-#Unfortunately, we cannot use the df_to_GGraster_center_points function, because thre are multiple observations per raster cell, and we need to pass a function to the rasterize function. I tried doing this through the function, but could not figure it out. So this plot will be a bit more manual.
-#actual_abd_df<-df_to_GGraster_center_points(input_df = ebird_habitat,crs = 4326,variable_to_plot_QUOTED = "observation_count",rasterize_fun = "mean")
+#Unfortunately, we cannot use the df_to_GGraster_center_points function, because there are multiple observations per raster cell, and we need to pass a function to the rasterize function. I tried doing this through the function, but to no avail. So this plot will be a bit more manual.
 
 actual_abd_plot<-ebird_standard_frame+
   geom_sf(data=ebird_final_full_sf,
@@ -416,10 +344,10 @@ grid.arrange(#padding= unit(0.1, "line"),
 
 
 
-#Create a function to take an INLA object and extract a bunch of results
+#Create a function to take an INLA object and extract desired results results
 INLA_results<-function(model,stack){
   
-  #First define a function for doing stuff. It needs to be inside since it takes "model" as an argument
+  #First define a function for doing tasks. It needs to be inside since it takes "model" as an argument
   INLA_pred_CI<-function(bin_index,poi_index){
     #Extract the fitted values
     bin_preds<-model$summary.linear.predictor$mean[bin_index]%>%invlogit
@@ -549,7 +477,7 @@ block_locations<-read_sf(paste0(research_path,"/Data Cache/Block Coordinates/Wbb
 # Mapping======================================================================
 
 #ggplot works just fine for sf files, so let's take a look at the blocks:
-#The wisconsin_sf is overwriting the coordinate system (throws warning), but there does not seem to be a discernable difference
+#The wisconsin_sf is overwriting the coordinate system (throws warning), but there does not seem to be a discernible difference
 if(images==TRUE){
   Block_Types<-ggplot() +
   geom_sf(data=block_locations,
@@ -588,12 +516,11 @@ ggsave(filename = paste0(images,"/Block_Types",".png"),plot=Block_Types,device =
 # #NOTE: If the line below does not work, simply restart your R session. That will fix it.
 # global_data <- auk_ebd(
 #   file="ebd_relApr-2019.txt",
-#   file_sampling = "ebd_sampling_relApr-2019.txt")#SAMPLING IS OUT OF DATE/NOT ON DRIVE!
+#   file_sampling = "ebd_sampling_relApr-2019.txt")
 # data_filter <-global_data %>%
-#   # auk_project("EBIRD_ATL_WI")%>% #THIS FILTER WAS NOT RUN, but added later
+#   # auk_project("EBIRD_ATL_WI")%>% 
 #   # We want Wisconsin observations
 #   auk_state(state = "US-WI") %>% #WARNING: BBA Blocks may fall outside of Wisconsin. Address.
-#   #It would appear that I'm missing data from 2018 (possibly earlier, but not before start of 2017)
 #   auk_date(date = c("2015-01-01", "2019-12-31"))
 # 
 # eBird_path_filter1 <- file.path(filter1_path, sampling_doc)
@@ -619,7 +546,7 @@ if(filter2_complete==TRUE){"You've already filtered (filter2) and stored your eB
     file_sampling = sampling_doc)
   
   filter2<-filter1_data%>%
-    auk_project("EBIRD_ATL_WI")%>% #This step really should be done in filter1, but I forgot to do it
+    auk_project("EBIRD_ATL_WI")%>% #This step really should be done in filter1, but this works
     auk_species("Red-Eyed Vireo")%>% #From the dataset, pick the species
     auk_complete() #Only include checklists where users reported all species seen (presence-absence)
   
@@ -628,8 +555,8 @@ if(filter2_complete==TRUE){"You've already filtered (filter2) and stored your eB
   # Stop the clock
   
   
-  #Here, we zero-fill the data, making it presense absence.
-  #I should filter out check lists that do not match the block, but for now, I will assume they match the block.
+  #Here, we zero-fill the data, making it presence/absence.
+  #I should filter out checklists that do not match the block, but this should not be a large quality concern
   
 }
 
@@ -775,7 +702,7 @@ ne_state_lines <- read_sf("gis-data.gpkg", "ne_state_lines") %>%
 # get list of tiles required to cover this region. Tiles are large pieces of cartographic data
 #that span the earth. It would takes only one MODIS tile to cover Wisconsin, to give a sense of a 
 #tile's size.
-tiles <- getTile(wisconsin_sf) #Give the tile list a name, apar
+tiles <- getTile(wisconsin_sf) #Give the tile list a name
 tiles@tile #See the list just to confirm it makes sense. "@tile" just tells R where in the 
 #meta data description for "tiles" the actual tile information, similar to picking out a particular
 #datapoint from a data from with df[2,3], for example.
@@ -800,10 +727,10 @@ if(MODIS_tiles_present==TRUE){"MODIS data on file"}else{
   #best practices for more details on the arguments of "runGdal":http://strimas.com/ebird-best-practices/landcover.html
   #To see other bands (currently set to band 2, i.e. SDSstring "01", see https://lpdaac.usgs.gov/products/mcd12q1v006/)
   #product and collection tell the account which data to get the MODIS data. There are many layers in the 
-  #MODIS data, so we need to tell it to get UMD via the SDSstring argument. The tile arguments basically
+  #MODIS data, so we need to tell it to get UMD via the SDSstring argument. The tile arguments, basically.
   #give the coordinates of the tile we need. The years are self explanatory. The outDirPath tells 
   #where to send the data. "Job", a name for this task, which will become the sub-directory of 
-  #outDirPath within which the processed data are stored. This all outputs
+  #outDirPath within which the processed data are stored.
   tifs <- runGdal(product = "MCD12Q1", collection = "006", SDSstring = "01", 
                   tileH = tiles@tileH, tileV = tiles@tileV,
                   begin = begin_year, end = end_year, 
@@ -866,7 +793,7 @@ ebird_buff <- filter2_data %>%
 calculate_pland <- function(yr, regions, lc) {
   # create a lookup table to get locality_id from row number
   locs <- st_set_geometry(regions, NULL) %>% #Setting to "NULL" strips geometry out of sf object
-    mutate(id = row_number()) #adds a variable that simply lists the rownumber as the ID
+    mutate(id = row_number()) #adds a variable that simply lists the row number as the ID
   
   # extract using velox. NOTE: This block is still inside the function
   lc_vlx <- velox(lc[[yr]])#appears to take year list from landcover raster and convert to velox raster 
@@ -876,7 +803,7 @@ calculate_pland <- function(yr, regions, lc) {
     # join to lookup table to get locality_id
     inner_join(locs, ., by = "id") 
   # %>% 
-  #   select(-id)  #I commented this out because it gives the raster ID (I think), which is useful to have in the dataset for some data exploration endeavors
+  #   select(-id)  #I commented this out because it gives the raster ID, which is useful to have in the dataset for some data exploration endeavors
 }
 
 # iterate over all years calculating pland for all checklists in each
@@ -888,7 +815,7 @@ lc_extract <- ebird_buff %>%
 pland <- lc_extract %>% 
   # count landcovers
   count(locality_id, year,id, landcover_raster) %>% #I added id, otherwise I think it gets dropped
-  # calculate proporiton
+  # calculate proportion
   group_by(locality_id, year) %>% 
   mutate(pland = n / sum(n)) %>% 
   ungroup() %>% 
@@ -901,7 +828,7 @@ pland <- pland %>%
   mutate(landcover_raster = paste0("pland_", str_pad(landcover_raster, 2, pad = "0"))) %>% 
   tidyr::spread(landcover_raster, pland, fill = 0)
 
-#No idea why this won't  run when attached to the pipes above:
+#Have to run this routine seperately from block above; it won't pipe
 pland<-pland%>%
   mutate(year = as.integer(year))
 
@@ -921,8 +848,7 @@ primary_pland<-colnames(ebird_plands)[apply(ebird_plands,1,which.max)]
 
 #We merge these values back in and label the plands. Let's add a column with the actual names. R will only show you the first 50 columns, so you have to shift the view to see these new columns
 ebird_habitat<-cbind(ebird_habitat_preFinal,primary_pland_val,primary_pland)%>%
-  mutate(observation_count=as.numeric(observation_count),# This variable refuses to stay formatted as a numeric!
-         #position=numFactor(latitude, longitude), #for glmTMB random field
+  mutate(observation_count=as.numeric(observation_count),
          group=factor(1))#for glmTMB random field. Need a dummy grouping
 
 
@@ -932,7 +858,7 @@ ebird_habitat<-cbind(ebird_habitat_preFinal,primary_pland_val,primary_pland)%>%
 
 ```{r}
 #Now, we must observe something important. We have just extracted the PLAND values for each of
-#the observations. However, these neighborhoods do not align with the blocks. KEY: So these values can ONLY be used for modeling. When we go to make our MODEL, we will use the PLAND of the blocks to make PREDICTIONS. In the eBird guide, they aggregate raster pixels from MODIS by simply doubling the resolution and finding the PLAND for those. The weird thing is, this means the model is using 2.5x2.5 km pixels while the prediction surface is using what appears to be 1x1km pixels. I wonder if this could be the source of some error, although it seems reasonable. Thus, we need to have another set of PLAND values, for the raster pixels:
+#the observations. However, these neighborhoods do not align with the blocks. KEY: These values can ONLY be used for modeling. When we go to make our MODEL, we will use the PLAND of the blocks to make predictions In the eBird guide, they aggregate raster pixels from MODIS by simply doubling the resolution and finding the PLAND for those. The weird thing is, this means the model is using 2.5x2.5 km pixels while the prediction surface is using what appears to be 1x1km pixels. I wonder if this could be the source of some error, although it seems reasonable. Thus, we need to have another set of PLAND values, for the raster pixels:
 
 agg_factor <- round(2 * neighborhood_radius / res(landcover_raster))
 r <- raster(landcover_raster) %>% #By default, raster() reads the first layer of the landcover raster (the first year). Doing summary(r) vs. summary(landcover_raster), we can see that r is just a grid, whereas landcover raster actually have values.
@@ -1005,7 +931,7 @@ prediction_pland<-cbind(prediction_pland_preFinal,primary_prediction_pland_val,p
 
 ```{r}
 
-  #Load in raster data for elevation acorss the world
+  #Load in raster data for elevation across the world
   elev <- raster(paste0(data_cache,"/Spatial/elevation_1KMmd_GMTEDmd.tif"))
   
 wisconsin_elev<-r_cells%>%
@@ -1057,6 +983,7 @@ prediction_pland <- inner_join(prediction_pland, elev_pred, by = "id")
 #Data Cleaning
 
 Dataset Summary:
+
 This documents produces many datasets. Below, I list the main datasets and an overview of what they represent
 
 1) filter2_data: Raw dataset of all observations, filtered by ONE species. No covariates are appended. PROJECTION: crs = 4326
@@ -1122,7 +1049,7 @@ ebird_unneeded_info_step<-ebird_unneeded_info_step0%>%
          duration_minutes<data_boundaries$duration_minutes,
          number_observers<data_boundaries$number_observers)
 
-#lets' now set the default values for doing predictin, since the prediction set does nto have effort covariates. We'll start with the number of observers
+#Lets' now set the default values for doing prediction, since the prediction set does not have effort covariates. We'll start with the number of observers.
 #It's not clear the relationship between number of observers and observation count. Let's clarify.
 observer_impact<-ebird_unneeded_info_step%>%
   filter(number_observers<=15)%>%
@@ -1134,8 +1061,8 @@ if(run_developing_code==T){
   geom_line(data=observer_impact,mapping = aes(x=number_observers,y=mean_prob))
 }
 
-#It's not clear what number of observers to use from the above
-#. We'll use the 5 percentile, which should always be 1. 
+#It's not clear what number of observers to use from the above.
+#We'll use the 5th percentile, which should always be 1. 
 #As for time started, we will find the optimal detection time:
 time_impact<-ebird_unneeded_info_step%>%
   mutate(time_observations_started=round(time_observations_started,1))%>%
@@ -1185,7 +1112,7 @@ best_effort<-data.frame(type=c("effort_pred_default"),
 
 #..........Effort Data for prediction###############################################################
 
-#Mark:Now I'll add in standard settings for effort variable
+#Now I'll add in standard settings for effort variable
 prediction_pland<-prediction_pland%>%
   mutate(time_observations_started=best_effort$time_observations_started,
          duration_minutes=best_effort$duration_minutes,
@@ -1198,7 +1125,7 @@ prediction_pland<-prediction_pland%>%
 
 #..........Gridding
 
-We assign all observations and prediction coordinates to a grid. These will serve as e the random intercept regions. We also subsample in this phase
+We assign all observations and prediction coordinates to a grid.
 ```{r}
 
  spacing<-20 #KM
@@ -1224,9 +1151,9 @@ prediction_pland_gridded <- prediction_pland %>%
 
 #How many cells does this give us?
 unique(prediction_pland_gridded$cell)%>%length
-#This will not be exactly the same as for ebird, but the grids are the same in terms of placement, which is what really matters. I'm not totally sure why they are different, because even if we take away the fact that I filtered out some hexes that did not have enough to subsample for ethe ebird set, I still don't have enough.
+#This will not be exactly the same as for ebird, but the grids are the same in terms of placement, which is what really matters.
 
-#Most importantly, we need to make sure that these vectors share names, or else when we go to the mixed model, it will think that all of the levels for the prediciton set are new:
+#Most importantly, we need to make sure that these vectors share names, or else when we go to the mixed model, it will think that all of the levels for the prediction set are new:
 
 mean((unique(ebird_grid_sample_step$cell))%in%unique(prediction_pland_gridded$cell))
 
@@ -1360,7 +1287,7 @@ ebird_train_full_sf<-st_as_sf(ebird_final_train,
                            crs=4326)
 
 
-#Do you want to want to use the full dataset or just a subset?
+#Do you want to want to use the full dataset or just a subset? User gets to specify
 
 if(use_full_datast==T){
   train_SELECTED<-ebird_final_train
@@ -1411,15 +1338,13 @@ final_coverage_report
 #Model Setup
 #..........Variable Selection
 ```{r}
-  #Which pland values
+
+  #Which pland values do you want?
   pland_sizes<-colMeans(select(ebird_final_full,starts_with("pland")))%>%round(2)%>%t%>%t%>%data.frame()%>%rownames_to_column%>%set_names("pland","Percent")%>%mutate(Percent=100*Percent)%>%arrange(Percent)%>%tidy_pland(pland_var = "pland")%>%
   set_names(c("Land Type","Percentage"))%>%arrange(desc(Percentage))
 
 write.csv(x = pland_sizes,file = paste0(images,"/pland_sizes.csv"))
 
-
-
-  
   #Remove any plands that have less than 5%, except water and urban in the next step
   
   #Find all variables of interest
@@ -1432,7 +1357,7 @@ write.csv(x = pland_sizes,file = paste0(images,"/pland_sizes.csv"))
     #filter(!(Vars %in% c("longitude","latitude")))%>%
     mutate(Vars=as.character(Vars))
   
-  #Latitude and longitude are highly corrleated with many predictors an on this scale, may not carry their own informatio Additionally,certain plands were dropped due to the low number of pixels that have that have information. The reason we do this here is because in further model, they may have a strong relationship with the response, but due to their low prevelance, we don't want to accidentally select them when other more meaninful variables are in play.
+  #Latitude and longitude are highly correlated with many predictors an on this scale, may not carry their own information Additionally,certain plands were dropped due to the low number of pixels that have that have information. The reason we do this here is because in further model, they may have a strong relationship with the response, but due to their low prevalence, we don't want to accidentally select them when other more meaningful variables are in play.
   
   #Setup a dataframe to store AIC for each variable
   All_fixed_modeling_vars_list<-data.frame(var=All_fixed_modeling_vars_col$Vars)
@@ -1508,7 +1433,7 @@ INLA_pred<-ebird_final_predict
 #..........Mesh Options
 ```{r}
 
-#Get the coordiantes form the prediction set. Get every 50th coordinate so we can get similar coverage for the meshbuilder without loosing much shape
+#Get the coordinates form the prediction set. Get every 50th coordinate so we can get similar coverage for the meshbuilder without loosing much shape
 pred_coords_lonlat_df<-ebird_final_predict %>% 
   filter(row_number() %% 10 == 1)%>%
   select(longitude,latitude)
@@ -1569,7 +1494,7 @@ mesh_cut40<-create_mesh(cutoff = 40)
 
  
   
-  #Define priors for spde. Understanding this is quite challenging, but this conversation has some good insight (https://groups.google.com/forum/#!topic/r-inla-discussion-group/cPU0iJA2UqY). Specifically, Fuglstad (one of the authros!!), says " In the function you use to construct the SPDE object, the parameter rho is the distance at which the correlation between the values of the spatial effect at two spatial locations is approximately 0.1.
+  #Define priors for spde. Understanding this is quite challenging, but this conversation has some good insight (https://groups.google.com/forum/#!topic/r-inla-discussion-group/cPU0iJA2UqY). Specifically, Fuglstad (one of the authors!), says "In the function you use to construct the SPDE object, the parameter rho is the distance at which the correlation between the values of the spatial effect at two spatial locations is approximately 0.1."
   
 ```
 
@@ -1630,7 +1555,7 @@ model_list<-rep(list(NA),nrow(INSTRUCTIONS))%>%
 #SAVE WORKSPACE (END)
 
 ```{r}
-#ALWAYS LEAVE THIS COMMENTED OR ELSE YOU MAY ACCIDENTALLY OVERWRITE
+#Leave this commented to prevent auto-overwriting
 # save.image(file = paste0(models_path,"/",model_iteration," Models","/initial_run_",model_iteration,".RData"))
 
 #load(file = "C:\\Users\\Mark\\Documents\\Modeling Suite\\Data Cache\\.RData")
@@ -1793,13 +1718,13 @@ if(images==TRUE){
   
     #==========================ALL LAND TYPES
   
-#NOTE: If you would like to increase the resolutoin on the covarites maps,
-#change the agg_factor for prediciton_pland to 0.50001, which represents 500 meters (it won't take .5, which is the exact resolution). However, it will be much slower.
+#NOTE: If you would like to increase the resolution on the covarites maps,
+#change the agg_factor for predictioon_pland to 0.50001, which represents 500 meters (it won't take .5, which is the exact resolution). However, it will be much slower.
 
 
 land_types_plot_df<-df_to_GGraster_center_points(input_df = prediction_pland,crs=4326,variable_to_plot_QUOTED = "primary_prediction_pland_code")
 
-  #If you are plotting using aggregated data (not direct modis pixels), it will come out wrong. Also, the colors will be off, because I think more habitat types are identified at a finer resolution.
+  #If you are plotting using aggregated data (not direct modis pixels), it will come out wrong. Also, the colors will be off, because more habitat types are identified at a finer resolution.
 land_type_plot<-ebird_standard_frame+
   geom_raster(data = land_types_plot_df , aes(x = latitude, y = longitude, fill = as.factor(primary_prediction_pland_code))) + #smoother is available
   scale_fill_manual(values = c("royalblue1",
@@ -1885,7 +1810,7 @@ dataset_info<-ebird_final_full%>%
             `# of Checklists w/ Observations`=sum(species_observed),
             `# of Birds Observed`=sum(observation_count))%>%t%>%round(0)%>%data.frame()
 
-#However, there is one data point that needs to be amended. The number of distinct observer_ids represents groups for many observations. I need to find the number of truly unique observers, which will take a some parsing of that colum. I will parse it apart, and manually update that number.
+#However, there is one data point that needs to be amended. The number of distinct observer_ids represents groups for many observations. I need to find the number of truly unique observers, which will take a some parsing of that column. I will parse it apart, and manually update that number.
 
 #Store a concated string of all observer ids
 unique_observer_ids<-paste(ebird_final_full$observer_id,collapse = "")%>%
@@ -1909,7 +1834,6 @@ data_set_info_final<-data.frame(Metric=data_set_info_labels$.%>%as.vector,Count=
 write_csv(x=data_set_info_final,path=paste0(data_summaries,"/data_set_counts_final.csv"))
 
 #In order to understand how well we can make histories for each person, we will make a summary of checklists by id.
-
 
 #WARNING: I FILTERED OUT GROUPS. So this is a conservative estimate. Certain people have more than 1 checklist.
 plot_data<-ebird_final_full%>%
@@ -2011,16 +1935,6 @@ checklists<-ebird_standard_frame+
                              "Seen"))
 
 
-
- 
-
-
-
-
-
-
-
-
     ggsave(filename = paste0(images,"/checklists",".png"),plot=checklists,device = "png")
   
   #========================================================================== END Checklists
@@ -2028,7 +1942,6 @@ checklists<-ebird_standard_frame+
   #At this point, we have just defined a regions of interest to make the dataset manageable, but we have done nothing to control the quality of the data. Here, we run a series of analyses.
   
   #First, let's check out how many observations there are per block for a given species, which are about 3 miles x 3 miles:
-  
 
     
     atlas_summary<-filter2b_data%>%
@@ -2152,8 +2065,8 @@ full_resids<-train_SELECTED$observation_count-model_list_complete[[fixed_index]]
 variogram_df<-train_SELECTED%>%
   mutate(full_resids=full_resids)
 
-  #Now, we need to add in the projection so that the distance units are interprtable:
-#It's best to use a unit of measure that (somewhate) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
+  #Now, we need to add in the projection so that the distance units are comprehensible:
+#It's best to use a unit of measure that (somewhat) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
 
 
   variogram_lonlat <- SpatialPointsDataFrame(coords = variogram_df%>%select(longitude,latitude),
@@ -2171,9 +2084,8 @@ binom_resids<-train_SELECTED$species_observed-model_list_complete[[fixed_index]]
 binom_df<-train_SELECTED%>%
   mutate(binom_resids=binom_resids)
 
-  #Now, we need to add in the projection so that the distance units are interprtable:
-#It's best to use a unit of measure that (somewhate) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
-
+  #Now, we need to add in the projection so that the distance units are comprehensible:
+#It's best to use a unit of measure that (somewhat) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
 
   binom_lonlat <- SpatialPointsDataFrame(coords = binom_df%>%select(longitude,latitude),
                                              data = binom_df%>%select(-longitude,-latitude),
@@ -2192,8 +2104,8 @@ poi_df<-train_SELECTED%>%
   filter(observation_count!=0)%>%
   mutate(poi_resids=poi_resids)
 
-  #Now, we need to add in the projection so that the distance units are interprtable:
-#It's best to use a unit of measure that (somewhate) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
+  #Now, we need to add in the projection so that the distance units are comprehensible:
+#It's best to use a unit of measure that (somewhat) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
 
 
   poi_lonlat <- SpatialPointsDataFrame(coords = poi_df%>%select(longitude,latitude),
@@ -2204,7 +2116,6 @@ poi_df<-train_SELECTED%>%
 
   #Now, it get's set off to the modeling job
   
-  
       #=====================================Straight data
 #First, get the residuals:
 intercept_resids<-train_SELECTED$observation_count
@@ -2212,8 +2123,8 @@ intercept_resids<-train_SELECTED$observation_count
 intercept_df<-train_SELECTED%>%
   mutate(binom_resids=intercept_resids)
 
-  #Now, we need to add in the projection so that the distance units are interprtable:
-#It's best to use a unit of measure that (somewhate) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
+  #Now, we need to add in the projection so that the distance units are comprehensible:
+#It's best to use a unit of measure that (somewhat) preserves distance, which lat/long definitely does not. So take the data and put it in albers:
 
 
   intercept_lonlat <- SpatialPointsDataFrame(coords = intercept_df%>%select(longitude,latitude),
@@ -2651,11 +2562,10 @@ for(i in 1:nrow(CV_error_table)){
   }else{NA}
 }
 
-#Annnnnd I messed up. I accidentally did RMSE for the Caret models. Undo that 
 # CV_error_table<-CV_error_table%>%
 #   mutate(test_MSE=ifelse(model_id==knn_position,test_MSE^2,test_MSE))
 
-#The sds are SUPER similar...what is going on? Compare in wide format:
+#Just analyzing table to compare SEs...
 wideer<-pivot_wider(CV_error_table,names_from = fold,values_from = test_MSE)%>%
   select(-model_id)
 (apply(X = wideer,MARGIN = 1,FUN = sd)/sqrt(folds))%>%round(2)
@@ -2762,7 +2672,7 @@ cbind(predict(Hurd_fixed_model,train_SELECTED,type="response"),
 
 if(images==T){
 
-#GREAT exlanation of this metric
+#GREAT explanation of RF importance metric:
 # https://stats.stackexchange.com/questions/162465/in-a-random-forest-is-larger-incmse-better-or-worse
 #https://cran.r-project.org/web/packages/randomForest/randomForest.pdf
 rf_importance<-randomForest::importance(model_list_complete$`9`$model$finalModel,
@@ -3029,11 +2939,7 @@ rank_comparison<-full_join(rf_reg_rank,standard_reg_rank,by = c("Covariate" = "V
 
 stargazer(rank_comparison,summary = F,rownames = F)
   
-  
-
-
-
-#8 and 11 are lat long respectively if rf done by self, water bodies and woody savannahs don't cover zero in regression, only poisson shown here
+#8 and 11 are lat long respectively if rf done by self, water bodies and woody savannas don't cover zero in regression, only poisson shown here
 
 ```
 
@@ -3080,7 +2986,7 @@ Model_Label<-All_fixed_modeling_vars_col%>%
 
 ```{r}
 if(run_developing_code==T){
-#WARNING!!! YOU need to manually paste these into your sources bib document
+#You need to manually paste these into your sources bib document
 knitr::write_bib(x = (.packages()),
                  #tweak = "",
                  width = 60,
